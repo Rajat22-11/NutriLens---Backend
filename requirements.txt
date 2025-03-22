@@ -10,7 +10,7 @@ pymongo
 # Image processing
 opencv-python
 pillow
-numpy
+numpy==1.24.4  # Pinned to last 1.x version to avoid compatibility issues
 
 # Data processing
 pandas
