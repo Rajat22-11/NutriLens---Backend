@@ -1,30 +1,5 @@
-# Flask and extensions
-flask
-flask-cors
-flask-jwt-extended
-python-dotenv
+torch==2.0.1+cpu
+torchvision==0.15.2+cpu
+torchaudio==2.0.2+cpu
 
-# Database
-pymongo
-
-# Image processing
-opencv-python
-pillow
-numpy==1.24.4  # Pinned to last 1.x version to avoid compatibility issues
-
-# Data processing
-pandas
-
-# AI/ML
-google-generativeai==0.3.1
-
-# Utilities
-requests
-bs4
-
-# PyTorch with CUDA support
-torch==2.0.1
-torchvision==0.15.2
-torchaudio==2.0.2
-
---extra-index-url https://download.pytorch.org/whl/cu118
+--extra-index-url https://download.pytorch.org/whl/cpu  # Use CPU-only packages

@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 # Force TLS 1.2 (if needed)
 ssl.OPENSSL_VERSION
 ssl._create_default_https_context = ssl._create_unverified_context
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
@@ -48,6 +48,7 @@ if os.name == "nt":
 
 # Load Environment Variables
 load_dotenv()
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Initialize Flask App (single instance)
 app = Flask(__name__)
@@ -113,14 +114,19 @@ except ModuleNotFoundError as e:
     sys.exit(1)
 
 # Select Device (GPU/CPU)
-DEVICE = select_device("cuda:0" if torch.cuda.is_available() else "cpu")
+DEVICE = torch.device('cpu')
 print(f"🖥️ Using device: {DEVICE}")
 
 # Load YOLO Model with CUDA optimizations
 MODEL_WEIGHTS = os.path.join(BASE_DIR, "models", "best.pt")
 # Enable half precision for faster inference if using CUDA
-half = DEVICE.type != "cpu"  # half precision only supported on CUDA
+# half = False  # disable half precision since we're using CPU
+# model = DetectMultiBackend(MODEL_WEIGHTS, device=DEVICE, dnn=False, fp16=half)
+
+#Optimized for Render Deployment, due to Render's GPU limitations
+half = False  # Disable half-precision to reduce memory
 model = DetectMultiBackend(MODEL_WEIGHTS, device=DEVICE, dnn=False, fp16=half)
+
 
 # Clear CUDA cache to ensure clean start
 if torch.cuda.is_available():
@@ -163,11 +169,9 @@ def preprocess_image(image_path):
     """Preprocess image for YOLO model with CUDA optimization."""
     img = cv2.imread(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    # You may consider using a larger resolution (e.g., 640x640) if needed
     img = cv2.resize(img, (320, 320))
     img = torch.from_numpy(img).float().to(DEVICE) / 255.0
     img = img.permute(2, 0, 1).unsqueeze(0)
-    # Use half precision for CUDA devices to improve performance
     if DEVICE.type != "cpu" and model.fp16:
         img = img.half()
     return img
@@ -1167,5 +1171,6 @@ def save_analysis():
 
 if __name__ == "__main__":
     print("🚀 Starting Flask server...")
-    app.run(debug=True, port=5000)
+    port = int(os.getenv('PORT', 5000))
+    app.run(host='0.0.0.0', debug=False, port=port)
 
