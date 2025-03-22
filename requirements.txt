@@ -1,0 +1,29 @@
+# Flask and extensions
+flask
+flask-cors
+flask-jwt-extended
+python-dotenv
+
+# Database
+pymongo
+
+# Image processing
+opencv-python
+pillow
+numpy
+
+# Data processing
+pandas
+
+# AI/ML
+google-generativeai==0.3.1
+
+# Utilities
+requests
+bs4
+
+# PyTorch with CUDA 12.4 support
+torch==2.6.0+cu124
+torchvision==0.17.0+cu124
+torchaudio==2.6.0+cu124
+--index-url https://download.pytorch.org/whl/cu124

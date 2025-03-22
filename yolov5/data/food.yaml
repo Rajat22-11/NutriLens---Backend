@@ -1,0 +1,4 @@
+train: /content/dataset/images/train  # Path to training images after extraction
+val: /content/dataset/images/val      # Path to validation images after extraction
+nc: 15                                # Number of classes
+names: ['Biryani', 'CholeBhature', 'Dabeli', 'Dal', 'Dhokla', 'Dosa', 'Jalebi', 'KathiRoll', 'Kofta', 'Naan', 'Pakora', 'Paneer', 'Panipuri', 'PavBhaji', 'Vadapav']  # Class names
