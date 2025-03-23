@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 # Force TLS 1.2 (if needed)
 ssl.OPENSSL_VERSION
 ssl._create_default_https_context = ssl._create_unverified_context
-
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
@@ -48,7 +48,6 @@ if os.name == "nt":
 
 # Load Environment Variables
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 # Initialize Flask App (single instance)
 app = Flask(__name__)
@@ -56,7 +55,7 @@ app = Flask(__name__)
 # Enable CORS for ALL routes to fix the CORS issues
 CORS(app, 
      resources={r"/*": {
-         "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+         "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://*.render.com", "https://*.onrender.com"],
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          "allow_headers": ["Content-Type", "Authorization"],
          "expose_headers": ["Content-Type", "Authorization"],
@@ -1172,5 +1171,7 @@ def save_analysis():
 if __name__ == "__main__":
     print("🚀 Starting Flask server...")
     port = int(os.getenv('PORT', 5000))
+    # Ensure we're binding to 0.0.0.0 for Render deployment
+    # This allows the app to be accessible from outside the container
     app.run(host='0.0.0.0', debug=False, port=port)
 
