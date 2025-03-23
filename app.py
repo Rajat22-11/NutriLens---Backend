@@ -20,7 +20,7 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
+from flask_cors import CORS, cross_origin
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from PIL import Image, ImageDraw, ImageFont
 from bson import ObjectId
@@ -1078,6 +1078,7 @@ def get_meal_trends():
 
 
 @app.route("/api/auth/profile", methods=["GET", "OPTIONS"])
+@cross_origin(supports_credentials=True)
 @jwt_required()
 def get_auth_profile():
     # Handle preflight OPTIONS request
