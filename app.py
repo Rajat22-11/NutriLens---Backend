@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 # Force TLS 1.2 (if needed)
 ssl.OPENSSL_VERSION
 ssl._create_default_https_context = ssl._create_unverified_context
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
@@ -49,7 +49,7 @@ if os.name == "nt":
 
 # Load Environment Variables
 load_dotenv()
-
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 # Initialize Flask App (single instance)
 app = Flask(__name__)
 
