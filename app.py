@@ -28,6 +28,7 @@ from bson import ObjectId
 # Import Authentication Routes and MongoDB configuration
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
+from routes.health_routes import health_bp
 from config.config import client, user_collection, user_data_collection 
 # MongoDB Collections
 try:
@@ -88,6 +89,9 @@ app.register_blueprint(auth_bp, url_prefix="/api/auth")
 # Register User Routes
 app.register_blueprint(user_bp, url_prefix="/api/user")
 
+# Register Health Check Routes
+app.register_blueprint(health_bp, url_prefix="/api")
+
 # Define Base Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -114,7 +118,7 @@ except ModuleNotFoundError as e:
 
 # Select Device (GPU/CPU)
 # DEVICE = select_device("cpu")
-DEVICE = "cpu"
+DEVICE = torch.device("cpu")
 print(f"🖥️ Using device: {DEVICE}")
 
 # Load YOLO Model with CUDA optimizations
