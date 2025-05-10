@@ -20,7 +20,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS, cross_origin
+from flask_cors import CORS
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from PIL import Image, ImageDraw, ImageFont
 from bson import ObjectId
@@ -28,7 +28,6 @@ from bson import ObjectId
 # Import Authentication Routes and MongoDB configuration
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
-from routes.health_routes import health_bp
 from config.config import client, user_collection, user_data_collection 
 # MongoDB Collections
 try:
@@ -56,7 +55,7 @@ app = Flask(__name__)
 # Enable CORS for ALL routes to fix the CORS issues
 CORS(app, 
      resources={r"/*": {
-         "origins": ["http://localhost:5173", "http://127.0.0.1:5173", "https://nutrilens-frontend.onrender.com"],
+         "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
          "allow_headers": ["Content-Type", "Authorization"],
          "expose_headers": ["Content-Type", "Authorization"],
@@ -89,9 +88,6 @@ app.register_blueprint(auth_bp, url_prefix="/api/auth")
 # Register User Routes
 app.register_blueprint(user_bp, url_prefix="/api/user")
 
-# Register Health Check Routes
-app.register_blueprint(health_bp, url_prefix="/api")
-
 # Define Base Directories
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
@@ -117,8 +113,7 @@ except ModuleNotFoundError as e:
     sys.exit(1)
 
 # Select Device (GPU/CPU)
-# DEVICE = select_device("cpu")
-DEVICE = torch.device("cpu")
+DEVICE = torch.device('cpu')
 print(f"🖥️ Using device: {DEVICE}")
 
 # Load YOLO Model with CUDA optimizations
@@ -1078,7 +1073,6 @@ def get_meal_trends():
 
 
 @app.route("/api/auth/profile", methods=["GET", "OPTIONS"])
-@cross_origin(supports_credentials=True)
 @jwt_required()
 def get_auth_profile():
     # Handle preflight OPTIONS request
@@ -1176,6 +1170,6 @@ def save_analysis():
 
 if __name__ == "__main__":
     print("🚀 Starting Flask server...")
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', debug=False, port=port)
 
