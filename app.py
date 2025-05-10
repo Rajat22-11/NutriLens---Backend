@@ -52,16 +52,25 @@ genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 # Initialize Flask App (single instance)
 app = Flask(__name__)
 
-# Enable CORS for ALL routes to fix the CORS issues
-CORS(app, 
+# Configure CORS with environment-specific origins
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Local development
+    "http://127.0.0.1:5173",  # Alternative local development
+    "https://nutrilens.vercel.app",  # Production frontend
+    "https://nutrilens-frontend.vercel.app"  # Alternative production frontend
+]
+
+# Enable CORS with proper configuration
+CORS(app,
      resources={r"/*": {
-         "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+         "origins": ALLOWED_ORIGINS,
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         "allow_headers": ["Content-Type", "Authorization"],
+         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
          "expose_headers": ["Content-Type", "Authorization"],
-         "supports_credentials": True
+         "supports_credentials": True,
+         "max_age": 3600  # Cache preflight requests for 1 hour
      }},
-     intercept_exceptions=False)
+     intercept_exceptions=True)  # Handle CORS errors properly
 
 # Add this route to handle OPTIONS requests for any endpoint
 # @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
