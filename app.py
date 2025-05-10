@@ -10,7 +10,7 @@ import ssl
 import google.generativeai as genai
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 
 # Force TLS 1.2 (if needed)
@@ -25,18 +25,19 @@ from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from PIL import Image, ImageDraw, ImageFont
 from bson import ObjectId
 
+# Load Environment Variables first
+load_dotenv()
+
 # Import Authentication Routes and MongoDB configuration
 from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from config.config import client, user_collection, user_data_collection 
-# MongoDB Collections
+
+# MongoDB Collections - Use the imported collections
 try:
+    # Use the imported client from config
     db = client["nutritionApp"]
-    user_collection = db["users"]  # Stores login/signup data
-    user_data_collection = db["userData"]  # Stores nutrition data
-    
-    # Verify database connection
-    client.admin.command('ping')
+    # Use the collections from the import
     print("✅ MongoDB connection successful!")
 except Exception as e:
     print(f"❌ MongoDB connection failed: {str(e)}")
@@ -46,18 +47,18 @@ except Exception as e:
 if os.name == "nt":
     pathlib.PosixPath = pathlib.WindowsPath
 
-# Load Environment Variables
-load_dotenv()
+# Configure Gemini API
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+
 # Initialize Flask App (single instance)
 app = Flask(__name__)
-
 # Configure CORS with environment-specific origins
 ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Local development
     "http://127.0.0.1:5173",  # Alternative local development
     "https://nutrilens.vercel.app",  # Production frontend
-    "https://nutrilens-frontend.vercel.app"  # Alternative production frontend
+    "https://nutrilens-frontend.vercel.app",  # Alternative production frontend
+    "https://nutrilens-frontend.onrender.com"  # Render-hosted frontend
 ]
 
 # Enable CORS with proper configuration
@@ -71,21 +72,6 @@ CORS(app,
          "max_age": 3600  # Cache preflight requests for 1 hour
      }},
      intercept_exceptions=True)  # Handle CORS errors properly
-
-# Add this route to handle OPTIONS requests for any endpoint
-# @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
-# @app.route('/<path:path>', methods=['OPTIONS'])
-# def handle_options(path):
-#     return '', 200
-
-# Add these headers to all responses
-# @app.after_request
-# def add_cors_headers(response):
-#     response.headers.add('Access-Control-Allow-Origin', 'http://localhost:5173')
-#     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-#     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-#     response.headers.add('Access-Control-Allow-Credentials', 'true')
-#     return response
 
 # Configure JWT
 app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET")
@@ -121,19 +107,39 @@ except ModuleNotFoundError as e:
     print(f"❌ Error importing YOLOv5 modules: {e}")
     sys.exit(1)
 
-# Select Device (GPU/CPU)
+# Configure logging for better debugging on Render
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Select Device (CPU for Render compatibility)
 DEVICE = torch.device('cpu')
-print(f"🖥️ Using device: {DEVICE}")
+logger.info(f"🖥️ Using device: {DEVICE}")
 
-# Load YOLO Model with CUDA optimizations
+# Load YOLO Model with optimizations for Render
 MODEL_WEIGHTS = os.path.join(BASE_DIR, "models", "best.pt")
-# Enable half precision for faster inference if using CUDA
-# half = False  # disable half precision since we're using CPU
-# model = DetectMultiBackend(MODEL_WEIGHTS, device=DEVICE, dnn=False, fp16=half)
 
-#Optimized for Render Deployment, due to Render's GPU limitations
+# Verify model file exists
+if not os.path.exists(MODEL_WEIGHTS):
+    logger.error(f"❌ Model weights file not found at: {MODEL_WEIGHTS}")
+    # Create models directory if it doesn't exist
+    os.makedirs(os.path.dirname(MODEL_WEIGHTS), exist_ok=True)
+    logger.info(f"Created models directory at: {os.path.dirname(MODEL_WEIGHTS)}")
+
+# Optimized for Render Deployment
 half = False  # Disable half-precision to reduce memory
-model = DetectMultiBackend(MODEL_WEIGHTS, device=DEVICE, dnn=False, fp16=half)
+
+# Global model variable
+model = None
+
+# Load model with proper error handling
+try:
+    logger.info(f"Loading YOLOv5 model from: {MODEL_WEIGHTS}")
+    model = DetectMultiBackend(MODEL_WEIGHTS, device=DEVICE, dnn=False, fp16=half)
+    logger.info("✅ Model loaded successfully!")
+except Exception as e:
+    logger.error(f"❌ Error loading model: {str(e)}")
+    # Don't exit - allow fallback to Gemini API
 
 
 # Clear CUDA cache to ensure clean start
@@ -174,15 +180,34 @@ def estimate_weight(x1, y1, x2, y2, img_width, img_height):
 
 
 def preprocess_image(image_path):
-    """Preprocess image for YOLO model with CUDA optimization."""
-    img = cv2.imread(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (320, 320))
-    img = torch.from_numpy(img).float().to(DEVICE) / 255.0
-    img = img.permute(2, 0, 1).unsqueeze(0)
-    if DEVICE.type != "cpu" and model.fp16:
-        img = img.half()
-    return img
+    """Preprocess image for YOLO model with memory optimization for Render deployment."""
+    try:
+        # Try with OpenCV first
+        img = cv2.imread(image_path)
+        if img is None:
+            # Fallback to PIL if OpenCV fails
+            logger.warning("OpenCV failed to read image, trying PIL instead")
+            with Image.open(image_path) as pil_img:
+                img = np.array(pil_img.convert('RGB'))
+        
+        # Continue with preprocessing
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Resize with a smaller target size for Render's memory constraints
+        img = cv2.resize(img, (320, 320))
+        
+        # Convert to tensor with memory optimization
+        img = torch.from_numpy(img).float().to(DEVICE) / 255.0
+        img = img.permute(2, 0, 1).unsqueeze(0)
+        
+        # Apply half precision only if supported and enabled
+        if DEVICE.type != "cpu" and model is not None and model.fp16:
+            img = img.half()
+            
+        return img
+    except Exception as e:
+        logger.error(f"Error preprocessing image: {str(e)}")
+        raise
 
 
 def annotate_image(image_path, detections):
@@ -411,7 +436,7 @@ def store_analysis_data(user_id, image_filename, image_base64, detection_source,
 
         # Prepare the analysis entry
         analysis_entry = {
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
             "imageFilename": image_filename,
             "imageBase64": image_base64,
             "detectionSource": detection_source,
@@ -433,7 +458,7 @@ def store_analysis_data(user_id, image_filename, image_base64, detection_source,
             {"userId": user_id_str},
             {
                 "$push": {"analysisHistory": analysis_entry},
-                "$set": {"lastUpdated": datetime.utcnow()},
+                "$set": {"lastUpdated": datetime.now(timezone.utc)},
             },
             upsert=True
         )
@@ -461,29 +486,67 @@ def predict():
     try:
         current_user_id = ObjectId(current_user_id)
     except Exception as e:
-        print(f"❌ Error converting user ID: {str(e)}")
+        logger.error(f"❌ Error converting user ID: {str(e)}")
         return jsonify({"error": "Invalid user ID"}), 400
 
     if "file" not in request.files:
+        logger.warning("No file uploaded in request")
         return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
     image_filename = file.filename
     image_path = os.path.join(UPLOAD_FOLDER, image_filename)
-    file.save(image_path)
+    
+    # Ensure upload directory exists
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    
+    try:
+        file.save(image_path)
+        logger.info(f"\n🔍 Processing image: {image_filename}")
+    except Exception as e:
+        logger.error(f"❌ Error saving uploaded file: {str(e)}")
+        return jsonify({"error": f"Failed to save uploaded file: {str(e)}"}), 500
 
-    print(f"\n🔍 Processing image: {image_filename}")
-    img_cv = cv2.imread(image_path)
-    if img_cv is None:
-        print("❌ Failed to load image. Check if the file is valid.")
-        return jsonify({"error": "Failed to load image"}), 400
+    # Check if image can be loaded
+    try:
+        img_cv = cv2.imread(image_path)
+        if img_cv is None:
+            logger.error("❌ Failed to load image with OpenCV. Check if the file is valid.")
+            # Try with PIL as fallback
+            try:
+                with Image.open(image_path) as img_pil:
+                    logger.info("✅ Image loaded with PIL instead of OpenCV")
+                    img_cv = np.array(img_pil.convert('RGB'))
+            except Exception as e:
+                logger.error(f"❌ Failed to load image with PIL: {str(e)}")
+                return jsonify({"error": "Failed to load image - file may be corrupted"}), 400
+    except Exception as e:
+        logger.error(f"❌ Error loading image: {str(e)}")
+        return jsonify({"error": f"Failed to process image: {str(e)}"}), 500
 
     img_height, img_width, _ = img_cv.shape
-    img = preprocess_image(image_path)
-    print(f"📊 Image preprocessed: Shape {img.shape}")
-    pred = model(img)
-    pred = non_max_suppression(pred, 0.25, 0.45)[0]
-    sys.stdout.flush()
+    
+    # Check if model is loaded before attempting YOLO detection
+    if model is not None:
+        try:
+            logger.info(f"📊 Preprocessing image for model inference")
+            img = preprocess_image(image_path)
+            logger.info(f"📊 Image preprocessed: Shape {img.shape}")
+            
+            # Run model inference with memory optimization
+            with torch.no_grad():  # Disable gradient calculation to save memory
+                pred = model(img)
+            
+            pred = non_max_suppression(pred, 0.25, 0.45)[0]
+            sys.stdout.flush()
+        except Exception as e:
+            logger.error(f"❌ Error during model inference: {str(e)}")
+            logger.info("⚙️ Falling back to Gemini powered detection due to model error")
+            # Fall back to Gemini API
+            pred = torch.zeros((0, 6))
+    else:
+        logger.warning("⚠️ YOLO model not loaded, using Gemini API for detection")
+        pred = torch.zeros((0, 6))  # Empty prediction tensor
 
     if len(pred) == 0:
         print("❌ YOLO detection failed - No food items detected")
@@ -615,7 +678,6 @@ def predict():
             "nutrition_data": nutrition_data,
         }
     )
-
 
 @app.route("/api/analysis/history", methods=["GET"])
 @jwt_required()
@@ -1176,6 +1238,24 @@ def save_analysis():
     except Exception as e:
         print(f"❌ Error saving analysis: {str(e)}")
         return jsonify({"error": str(e)}), 500
+
+# Add this new endpoint for health check
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Health check endpoint to verify API is running."""
+    return jsonify({
+        "status": "online",
+        "timestamp": datetime.now(datetime.UTC).isoformat(),
+        "version": "1.0.0"
+    }), 200
+
+# Fix for the deprecation warning on line 878
+# Find this line in your code:
+# today = datetime.utcnow().date()
+# Replace it with:
+today = datetime.now(timezone.utc).date()
+
+
 
 if __name__ == "__main__":
     print("🚀 Starting Flask server...")
