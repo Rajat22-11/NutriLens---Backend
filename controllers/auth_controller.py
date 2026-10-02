@@ -1,114 +1,127 @@
-from flask import jsonify, request
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
-import os
-from config.config import user_collection  # Changed from users_collection to user_collection
-from flask_jwt_extended import create_access_token
-import traceback  # For detailed error logging
+import logging
+import re
+from datetime import datetime, timezone
 
-# Secret key for JWT (Ensure it is loaded properly)
-JWT_SECRET = os.getenv("JWT_SECRET")
+from flask import jsonify
+from flask_jwt_extended import create_access_token
+from pymongo.errors import DuplicateKeyError
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from config.config import user_collection
+
+logger = logging.getLogger(__name__)
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+PROFILE_FIELDS = {"age": (1, 120), "height": (50, 260), "weight": (20, 350)}
+GENDERS = {"male", "female", "other"}
+ACTIVITY_LEVELS = {"sedentary", "light", "moderate", "active", "very_active"}
+
+
+def error(message, status):
+    # "error" for the v1 client, "message" for the v2 client
+    return jsonify({"error": message, "message": message}), status
+
+
+def public_user(user):
+    return {
+        "_id": str(user["_id"]),
+        "id": str(user["_id"]),
+        "name": user.get("name", ""),
+        "email": user.get("email", ""),
+        "age": user.get("age") or None,
+        "height": user.get("height") or None,
+        "weight": user.get("weight") or None,
+        "gender": user.get("gender"),
+        "activityLevel": user.get("activityLevel"),
+        "customerType": user.get("customerType", "Basic"),
+        "createdAt": user.get("createdAt"),
+    }
+
+
+def clean_profile(data, partial=False):
+    """Validate optional profile fields. Returns (clean_dict, error_message)."""
+    out = {}
+    for field, (lo, hi) in PROFILE_FIELDS.items():
+        if field not in data or data[field] in (None, ""):
+            continue
+        try:
+            value = float(data[field])
+        except (TypeError, ValueError):
+            return None, f"{field.capitalize()} must be a number"
+        if not lo <= value <= hi:
+            return None, f"{field.capitalize()} must be between {lo} and {hi}"
+        out[field] = value
+    if data.get("gender"):
+        if data["gender"] not in GENDERS:
+            return None, "Invalid gender"
+        out["gender"] = data["gender"]
+    if data.get("activityLevel"):
+        if data["activityLevel"] not in ACTIVITY_LEVELS:
+            return None, "Invalid activity level"
+        out["activityLevel"] = data["activityLevel"]
+    if "name" in data:
+        name = str(data.get("name") or "").strip()
+        if not name and not partial:
+            return None, "Name is required"
+        if name:
+            out["name"] = name[:80]
+    return out, None
 
 
 def register_user(data):
+    data = data or {}
+    name = str(data.get("name") or "").strip()
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+
+    if not name:
+        return error("Please enter your name", 400)
+    if not EMAIL_RE.match(email):
+        return error("Please enter a valid email address", 400)
+    if len(password) < 6:
+        return error("Password must be at least 6 characters", 400)
+
+    profile, err = clean_profile(data, partial=True)
+    if err:
+        return error(err, 400)
+
+    if user_collection.find_one({"email": email}):
+        return error("An account with this email already exists", 409)
+
+    now = datetime.now(timezone.utc).isoformat()
+    new_user = {
+        **profile,
+        "name": name,
+        "email": email,
+        "passwordHash": generate_password_hash(password),
+        "customerType": data.get("customerType") if data.get("customerType") in ("Basic", "Premium") else "Basic",
+        "createdAt": now,
+        "updatedAt": now,
+    }
     try:
-        print(f"🔍 Signup Request Received: {data}")  # Log incoming data
-
-        # Validate required fields
-        required_fields = ["name", "email", "password", "customerType"]
-        for field in required_fields:
-            if field not in data or not data[field]:
-                print(f"❌ Missing field: {field}")
-                return jsonify({"error": f"Missing field: {field}"}), 400
-
-        # Check if email already exists
-        existing_user = user_collection.find_one({"email": data["email"]})
-        if existing_user:
-            print("❌ Email already exists!")
-            return jsonify({"error": "Email already exists!"}), 400
-
-        # Hash password securely
-        hashed_password = generate_password_hash(
-            data["password"], method="pbkdf2:sha256"
-        )
-
-        # Create user document
-        new_user = {
-            "name": data["name"],
-            "email": data["email"],
-            "passwordHash": hashed_password,
-            "age": float(data.get("age", 0)),  # Supports decimals
-            "height": float(data.get("height", 0)),  # Supports decimals
-            "weight": float(data.get("weight", 0)),  # Supports decimals
-            "customerType": data.get("customerType", "Basic"),  # Default: Basic
-            "createdAt": datetime.utcnow().isoformat(),
-            "updatedAt": datetime.utcnow().isoformat(),
-        }
-
-        # Insert user into database
         result = user_collection.insert_one(new_user)
-        new_user_id = result.inserted_id
-        print("✅ User successfully created!")
+    except DuplicateKeyError:
+        return error("An account with this email already exists", 409)
 
-        # Return a JWT token on signup with user ID as identity
-        access_token = create_access_token(identity=str(new_user_id))
-        return (
-            jsonify({
-                "message": "Account created successfully!", 
-                "token": access_token,
-                "user": {
-                    "_id": str(new_user_id),
-                    "name": data.get("name", ""),
-                    "email": data.get("email", ""),
-                    "customerType": data.get("customerType", "Basic")
-                }
-            }),
-            201,
-        )
-
-    except Exception as e:
-        print(f"❌ Signup Error: {str(e)}")
-        traceback.print_exc()  # Prints detailed error traceback for debugging
-        return jsonify({"error": "Internal server error"}), 500
+    new_user["_id"] = result.inserted_id
+    token = create_access_token(identity=str(result.inserted_id))
+    logger.info("New user registered")
+    return jsonify({"message": "Account created successfully!", "token": token, "user": public_user(new_user)}), 201
 
 
 def login_user(data):
-    try:
-        print(f"🔍 Login Request Received: {data}")  # Log incoming data
+    data = data or {}
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+    if not email or not password:
+        return error("Email and password are required", 400)
 
-        # Validate required fields
-        if "email" not in data or "password" not in data:
-            print("❌ Missing email or password")
-            return jsonify({"error": "Email and password are required"}), 400
+    # Older accounts may have been stored with mixed-case emails
+    user = user_collection.find_one({"email": email}) or user_collection.find_one(
+        {"email": {"$regex": f"^{re.escape(email)}$", "$options": "i"}}
+    )
+    if not user or not check_password_hash(user.get("passwordHash", ""), password):
+        return error("Invalid email or password", 401)
 
-        # Find user by email
-        user = user_collection.find_one({"email": data["email"]})
-        if not user:
-            print("❌ User not found")
-            return jsonify({"error": "User not found!"}), 404
-
-        # Check password
-        if not check_password_hash(user["passwordHash"], data["password"]):
-            print("❌ Invalid credentials")
-            return jsonify({"error": "Invalid credentials!"}), 401
-
-        # Generate JWT token with user ID as identity
-        access_token = create_access_token(identity=str(user["_id"]))
-        print("✅ Login successful!")
-
-        # Return user data along with token (including ObjectId as string)
-        return jsonify({
-            "token": access_token, 
-            "message": "Login successful!",
-            "user": {
-                "_id": str(user["_id"]),
-                "name": user.get("name", ""),
-                "email": user.get("email", ""),
-                "customerType": user.get("customerType", "Basic")
-            }
-        }), 200
-
-    except Exception as e:
-        print(f"❌ Login Error: {str(e)}")
-        traceback.print_exc()  # Prints detailed error traceback for debugging
-        return jsonify({"error": "Internal server error"}), 500
+    token = create_access_token(identity=str(user["_id"]))
+    return jsonify({"message": "Login successful!", "token": token, "user": public_user(user)}), 200

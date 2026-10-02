@@ -1,3 +1,42 @@
+# 🥗 NutriLens API (v2)
+
+> **v2 highlights** — app factory + gunicorn, structured Gemini JSON (google-genai, `gemini-2.5-flash`) instead of parsing HTML,
+> correct YOLO box scaling (letterbox + `scale_boxes`), multi-word dish lookup fixes (Chole Bhature, Pav Bhaji, Vada Pav…),
+> portion estimation from the food table, offline insights & health score when Gemini is unavailable,
+> summaries grouped by the user's **local** day/week/month, streaks & stats, profile updates, meal delete,
+> manual logging (`/api/foods`, `/api/analysis/manual`), 7-day JWTs, upload validation, no global TLS bypass,
+> and a pytest suite. All v1 endpoints and response fields are still served.
+
+## Quick start
+```bash
+python3.11 -m venv .venv && . .venv/bin/activate
+./render-build.sh                         # or: pip install -r requirements.txt && pip install --no-deps ultralytics==8.3.253 ultralytics-thop==2.2.1
+cp .env.example .env                      # set MONGO_URI (or mongomock://localhost), JWT_SECRET, GOOGLE_API_KEY
+python app.py                             # http://localhost:5000
+MONGO_URI=mongomock://localhost python -m pytest -q tests
+```
+
+## API
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/auth/signup`, `/api/auth/login` | returns `{token, user}` |
+| GET/PUT | `/api/user/profile` | name, age, height, weight, gender, activityLevel |
+| GET/PUT | `/api/user/nutrition/goals` | 8 nutrient goals |
+| GET | `/api/user/nutrition/summary?tz=<minutes>` | daily/weekly/monthly, today, goalProgress, stats |
+| GET | `/api/user/meal-trends?tz=<minutes>` | favourite foods, meal timings, weekdays |
+| POST | `/predict` (alias `/api/analysis/predict`) | multipart `file`; returns foods, totals, insights, annotated image |
+| GET | `/api/analysis/history`, `/api/analysis/<id>` | |
+| DELETE | `/api/analysis/<id>` | |
+| GET / POST | `/api/foods`, `/api/analysis/manual` | log without a photo |
+| GET | `/api/health` | `?deep=1` also pings MongoDB |
+
+## Deploy (Render)
+`render.yaml` defines `nutrilens-api-v2`, which auto-deploys on every push to `v2-redesign`.
+One-time setup: Render Dashboard → **New → Blueprint** → this repo & branch → fill in `MONGO_URI` and `GOOGLE_API_KEY` → **Apply**.
+`JWT_SECRET` is generated automatically. Allowed frontend origins: `CORS_ORIGINS` plus any `https://nutrilens*.onrender.com` / `*.vercel.app`.
+
+---
+
 # 🥗 NutriLens: AI-Powered Food Recognition & Nutrition Estimator
 
 ## 🚀 Project Overview
