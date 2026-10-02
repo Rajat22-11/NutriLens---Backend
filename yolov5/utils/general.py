@@ -34,16 +34,14 @@ import torch
 import torchvision
 import yaml
 
-# Import 'ultralytics' package or install if missing
+# NutriLens: 'ultralytics' is optional; without it requirement checks are skipped
+# instead of pip-installing packages at runtime.
 try:
-    import ultralytics
+    from ultralytics.utils.checks import check_requirements
+except ImportError:  # pragma: no cover
 
-    assert hasattr(ultralytics, "__version__")  # verify package is not directory
-except (ImportError, AssertionError):
-    os.system("pip install -U ultralytics")
-    import ultralytics
-
-from ultralytics.utils.checks import check_requirements
+    def check_requirements(*_args, **_kwargs):
+        return True
 
 from utils import TryExcept, emojis
 from utils.downloads import curl_download, gsutil_getsize
