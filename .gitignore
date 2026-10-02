@@ -1,2 +1,9 @@
 .env
-/yolov5/runs
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+uploads/
+results/
+yolov5/runs/

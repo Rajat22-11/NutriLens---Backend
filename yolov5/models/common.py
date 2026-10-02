@@ -22,18 +22,16 @@ import torch.nn as nn
 from PIL import Image
 from torch.cuda import amp
 
-# Import 'ultralytics' package or install if missing
+# NutriLens: 'ultralytics' is optional. Its plotting helpers are only used by
+# Detections.display/crop, never by DetectMultiBackend inference on .pt weights.
 try:
-    import ultralytics
+    from ultralytics.utils.plotting import Annotator, colors, save_one_box
+except ImportError:  # pragma: no cover
 
-    assert hasattr(ultralytics, "__version__")  # verify package is not directory
-except (ImportError, AssertionError):
-    import os
+    def _missing(*_args, **_kwargs):
+        raise ImportError("Install 'ultralytics' to use YOLOv5 plotting helpers")
 
-    os.system("pip install -U ultralytics")
-    import ultralytics
-
-from ultralytics.utils.plotting import Annotator, colors, save_one_box
+    Annotator = colors = save_one_box = _missing
 
 from utils import TryExcept
 from utils.dataloaders import exif_transpose, letterbox

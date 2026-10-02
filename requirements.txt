@@ -1,37 +1,35 @@
-# Flask and extensions
-flask
-flask-cors
-flask-jwt-extended
-python-dotenv
+# CPU-only PyTorch wheels (much smaller than the default CUDA build)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torchvision==0.20.1
+
+# Web
+flask==3.1.*
+flask-cors==6.*
+flask-jwt-extended==4.7.*
+gunicorn==23.*
+python-dotenv==1.*
 
 # Database
-pymongo
+pymongo==4.*
+certifi
 
-# Image processing
-# opencv-python
-opencv-python-headless
-pillow
-numpy==1.24.4  # Pinned to last 1.x version to avoid compatibility issues
+# Image / data
+opencv-python-headless==4.10.*
+pillow==11.*
+numpy==1.26.4
+pandas==2.2.*
 
-# Data processing
-pandas
-
-# AI/ML
-google-generativeai==0.3.1
-
-# Utilities
+# YOLOv5 runtime dependencies (see yolov5/requirements.txt)
+pyyaml
 requests
-bs4
+tqdm
+scipy
+matplotlib
+seaborn
+psutil
+gitpython
+setuptools<81  # yolov5 still imports pkg_resources
 
-# # PyTorch with CUDA support
-# torch==2.0.1
-# torchvision==0.15.2
-# torchaudio==2.0.2
-
-# --extra-index-url https://download.pytorch.org/whl/cu118
-
-torch==2.0.1+cpu
-torchvision==0.15.2+cpu
-torchaudio==2.0.2+cpu
-
---extra-index-url https://download.pytorch.org/whl/cpu  # Use CPU-only packages
+# AI
+google-genai==1.*

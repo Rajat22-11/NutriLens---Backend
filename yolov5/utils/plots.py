@@ -16,7 +16,10 @@ import seaborn as sn
 import torch
 from PIL import Image, ImageDraw
 from scipy.ndimage.filters import gaussian_filter1d
-from ultralytics.utils.plotting import Annotator
+try:  # NutriLens: 'ultralytics' is optional (only needed for drawing helpers)
+    from ultralytics.utils.plotting import Annotator
+except ImportError:  # pragma: no cover
+    Annotator = None
 
 from utils import TryExcept, threaded
 from utils.general import LOGGER, clip_boxes, increment_path, xywh2xyxy, xyxy2xywh

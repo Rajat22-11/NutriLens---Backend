@@ -1,184 +1,97 @@
-# 🥗 NutriLens: AI-Powered Food Recognition & Nutrition Estimator
+# 🥗 NutriLens — API
 
-## 🚀 Project Overview
+The Flask API behind NutriLens. It recognises Indian dishes in a photo, estimates portions and nutrition, and keeps each user's food diary, goals and trends.
 
-NutriLens is a sophisticated web application that combines computer vision and AI to provide instant nutritional analysis of food images. Using a dual-model approach with YOLOv5 for specialized Indian food detection and Google's Gemini Vision API as a fallback, the system offers accurate food recognition and detailed nutritional insights.
+**Live:** https://nutrilens-backend-aet6.onrender.com/api/health · **Web app:** [NutriLens---Frontend](https://github.com/Rajat22-11/NutriLens---Frontend)
 
-### 📸 Sample Screenshots
-![Screenshot 2025-03-22 133253](https://github.com/user-attachments/assets/dd6386b3-feb7-43a5-b9ee-c56a401427da)
+## How analysis works
 
-![Screenshot 2025-03-22 133108](https://github.com/user-attachments/assets/ac3fc746-e5c7-4236-8466-f52bac305309)
+1. **Detect**: a custom YOLOv5 model (`weights/best.pt`) finds the dishes on the plate. Images are letterboxed and boxes are mapped back to the original photo.
+2. **Estimate**: each dish's portion comes from how much of the frame it fills. Duplicate detections of the same dish are merged, and nutrition comes from `food_data/food_calorie_data2.csv`.
+3. **Explain**: Gemini (`gemini-2.5-flash`, structured JSON) writes a summary, a health insight, healthier swaps and a fun fact. Without a Gemini key, built-in rule-based insights are used instead.
+4. **Fallback**: if the model finds no known dish (for example packaged food or a nutrition label), Gemini vision identifies the food and estimates its nutrition.
+5. **Save**: the result is stored in the user's diary in MongoDB, with a thumbnail and a 0–100 health score.
 
-![Screenshot 2025-03-22 132931](https://github.com/user-attachments/assets/2d904be1-e5fc-42b4-846a-71396a2ec95f)
+**Dishes the model knows:** Biryani, Chole Bhature, Dabeli, Dal, Dhokla, Dosa, Jalebi, Kathi Roll, Kofta, Naan, Pakora, Paneer Tikka, Panipuri, Pav Bhaji, Vada Pav.
 
-![Screenshot 2025-03-25 094828](https://github.com/user-attachments/assets/4efc5b7f-b53a-45c9-b7a8-e83ef059ff7c)
+## Tech stack
 
+Python 3.11 · Flask 3 · Gunicorn · PyTorch (CPU) + YOLOv5 · Google Gen AI SDK · MongoDB (PyMongo) · Flask-JWT-Extended · Pillow · pandas
 
-
----
-
-## 🎯 Key Features
-
-### 🔍 Dual-Model Food Recognition
-
-- **YOLOv5 Model (Primary)**
-
-  - Specialized in detecting 15 Indian food categories
-  - Real-time object detection with portion estimation
-  - Offline processing for enhanced privacy
-  - Uses bounding box analysis for weight estimation
-
-- **Gemini Vision API (Fallback)**
-  - Handles unrecognized or packaged foods
-  - Extracts text from food labels and packaging
-  - Provides enhanced nutritional insights with tips and facts
-  - Offers natural language descriptions of food items
-
-> 🔄 If YOLOv5 fails to detect food items in the image, NutriLens automatically uses the **Gemini Vision API** as a fallback. This ensures that even packaged foods or edge cases without proper bounding boxes are still analyzed effectively using advanced image-to-text processing.
-
----
-
-## ⚖️ YOLOv5 vs Gemini Vision API – Feature Comparison
-
-| Feature                              | YOLOv5 (Primary Model)                                                       | Gemini Vision API (Fallback)                                                  |
-|--------------------------------------|------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| Detection Type                       | Custom object detection using bounding boxes                                | Multimodal image understanding (image-to-text)                                |
-| Use Case                             | Regular Indian meals and freshly cooked dishes                              | Packaged food, labels, or failed YOLO detections                              |
-| Accuracy on Indian Food              | High (trained on curated Indian dataset)                                    | Generalized, moderate accuracy                                                |
-| Portion Estimation                   | Yes – via bounding box area and scaling                                     | No – text-based understanding only                                            |
-| Processing Mode                      | Offline – runs locally on server                                             | Online – requires internet and API key                                        |
-| Customizability                      | Fully trainable on more classes and data                                    | Limited to Google’s API capabilities                                          |
-| Response Enrichment                  | Raw nutritional data from database                                           | Enhanced with emojis, tips, and fun facts                                     |
-| Speed                                | Fast inference (~30-50ms per image)                                         | Slower due to API call (~300-800ms latency)                                  |
-| Privacy                              | High – no external image transfer                                            | Low – image sent to external service                                          |
-| Cost                                 | Free (once model is trained)                                                | API usage may incur charges based on request volume                           |
-
-> 🧠 **Why YOLOv5 is Preferred:**  
-YOLOv5 provides real-time inference, local processing, better customization, and accurate portion estimation using visual clues—making it ideal for detecting Indian meals and delivering privacy-focused results.
-
----
-
-## 📊 Nutritional Analysis
-
-- Comprehensive breakdown of nutrients:
-  - Calories, Proteins, Carbohydrates, Fats
-  - Fiber, Sugar, Sodium, Cholesterol
-- Weight estimation using computer vision
-- Personalized health insights and recommendations
-- Historical tracking of nutritional intake
-
----
-
-## 💡 User Experience
-
-- Intuitive React-based interface
-- Real-time analysis feedback
-- Secure user authentication
-- Personal nutrition history tracking
-- Interactive data visualizations
-
----
-
-## 🛠️ Technical Architecture
-
-### Frontend (React PWA)
-
-- **Core Technologies**
-  - React with Vite for fast development
-  - Material UI for modern interface
-  - Recharts for data visualization
-  - JWT authentication
-
-### Backend (Flask)
-
-- **Core Components**
-  - Flask REST API
-  - JWT-based authentication
-  - MongoDB for data persistence
-  - CORS security configuration
-
-- **AI/ML Pipeline**
-  - YOLOv5 for food detection
-  - OpenCV for image processing
-  - Gemini API integration
-  - Pandas for nutritional calculations
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Python 3.8+
-- Node.js 18+
-- MongoDB
-- Google Cloud API key (for Gemini)
-
-### Backend Setup
+## Getting started
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd NutriLens/backend
-
-# Install dependencies
+python3.11 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your credentials
-
-# Start the server
-python app.py
+cp .env.example .env          # fill in the values below
+python app.py                 # http://localhost:5000
 ```
 
-### Frontend Setup
+Run the tests. They use an in-memory database, so no MongoDB or API key is needed:
 
 ```bash
-cd NutriLens/frontend
-npm install
-npm run dev
+MONGO_URI=mongomock://localhost python -m pytest -q tests
 ```
 
-Visit `http://localhost:5173` to access the application.
+### Environment variables
 
----
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URI` | ✅ | MongoDB connection string (`mongomock://localhost` for an in-memory DB) |
+| `JWT_SECRET` | ✅ | Secret used to sign login tokens |
+| `GOOGLE_API_KEY` | – | Gemini API key; enables AI insights and the vision fallback |
+| `GEMINI_MODEL` | – | Defaults to `gemini-2.5-flash` |
+| `MONGO_DB_NAME` | – | Defaults to `nutritionApp` |
+| `CORS_ORIGINS` | – | Comma-separated extra allowed origins. `https://nutrilens*.onrender.com` and `*.vercel.app` are always allowed. |
+| `YOLO_MODE` | – | `eager` (load at start-up, default), `lazy` or `off` |
+| `JWT_EXPIRES_DAYS`, `MAX_UPLOAD_MB`, `YOLO_CONF_THRESHOLD` | – | Defaults: 7 days, 10 MB, 0.35 |
 
-## 📁 Project Structure
+## API
+
+All endpoints except auth, health and the food list need an `Authorization: Bearer <token>` header. Errors are JSON with `message` and `error` fields.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/auth/signup` | Create an account → `{ token, user }` |
+| POST | `/api/auth/login` | Sign in → `{ token, user }` |
+| GET / PUT | `/api/user/profile` | Read or update name, age, height, weight, gender, activity level |
+| GET / PUT | `/api/user/nutrition/goals` | Daily goals for 8 nutrients |
+| GET | `/api/user/nutrition/summary?tz=<offset>` | Daily / weekly / monthly totals, today's progress, streak and stats |
+| GET | `/api/user/meal-trends?tz=<offset>` | Favourite foods, meal timings, weekday pattern |
+| POST | `/predict` (alias `/api/analysis/predict`) | Analyse a photo (multipart `file`) |
+| GET | `/api/analysis/history` | Food diary, newest first |
+| GET / DELETE | `/api/analysis/<id>` | Read or delete one meal |
+| GET | `/api/foods` | Built-in food table |
+| POST | `/api/analysis/manual` | Log a meal from the food table without a photo |
+| GET | `/api/health` | Status, model readiness, Gemini configured (`?deep=1` also pings MongoDB) |
+
+`tz` is the browser's `Date#getTimezoneOffset()` value, for example `-330` for India.
+
+## Project structure
 
 ```
-NutriLens/
-├── backend/
-│   ├── models/          # YOLOv5 model weights
-│   ├── food_data/       # Nutritional database
-│   ├── routes/          # API endpoints
-│   └── app.py           # Main application
-├── frontend/
-│   ├── src/
-│   │   ├── components/  # React components
-│   │   ├── pages/       # Application pages
-│   │   └── services/    # API services
-│   └── package.json
-├── assets/              # App screenshots for README
-└── README.md
+app.py                  # Flask app factory, CORS, JWT, error handlers
+gunicorn.conf.py        # production server settings
+config/config.py        # settings from environment variables + MongoDB client
+controllers/            # sign-up / login / profile validation
+routes/                 # auth, user (profile, goals, summary, trends), analysis
+services/
+├── analyzer.py         # photo → detections → nutrition → insights
+├── detector.py         # YOLOv5 model loading and inference
+├── gemini.py           # Gemini insights and vision fallback
+├── history.py          # diary entries, summaries, streaks, trends
+└── nutrition.py        # food table lookup, portions, health score
+weights/best.pt         # trained YOLOv5 weights
+yolov5/                 # vendored YOLOv5 code
+tests/                  # pytest suite
+samples/                # sample food photos
 ```
 
----
+## Deployment
 
-## 🔒 Security Features
+Runs on Render as a Python web service that redeploys automatically on every push to `main`; `render.yaml` describes it.
+The first request after the free instance has been idle takes up to a minute while the model loads.
 
-- JWT-based authentication
-- CORS protection
-- Secure credential storage
-- Rate limiting on API endpoints
-- Input validation and sanitization
+## License
 
----
-
-## 🌟 Future Enhancements
-
-- Support for more food categories
-- Enhanced portion estimation
-- Meal planning recommendations
-- Social sharing features
-- Offline mode support
+For educational and personal use. YOLOv5 is licensed under AGPL-3.0.

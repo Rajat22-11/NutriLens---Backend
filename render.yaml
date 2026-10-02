@@ -1,0 +1,38 @@
+# Render Blueprint for the NutriLens API.
+# Every push to `main` builds and deploys automatically.
+services:
+  - type: web
+    name: NutriLens---Backend
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: ./render-build.sh
+    startCommand: gunicorn -c gunicorn.conf.py app:app
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: APP_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false # paste your MongoDB Atlas connection string when prompted
+      - key: GOOGLE_API_KEY
+        sync: false # Gemini API key (optional - enables AI insights & fallback detection)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGO_DB_NAME
+        value: nutritionApp
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: YOLO_MODE
+        value: eager
+      - key: YOLO_CONFIG_DIR
+        value: /tmp/Ultralytics
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "4"
+      - key: CORS_ORIGINS
+        value: https://nutrilens-frontend.onrender.com,http://localhost:5173
